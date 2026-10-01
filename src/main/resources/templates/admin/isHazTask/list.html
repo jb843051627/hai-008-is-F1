@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:include="include :: header('隐患整改催办条')"/>
+    <style>
+        .round-card {padding: 12px 16px;}
+        .round-stat {display: inline-block; margin-right: 28px;}
+        .round-stat b {font-size: 22px; color: #1E9FFF; margin-left: 6px;}
+        .round-stat .s-suspended b {color: #FFB800;}
+    </style>
+</head>
+<body class="pear-container">
+
+<div class="layui-card">
+    <div class="layui-card-body round-card">
+        <span class="round-stat">待派<b id="cnt-waiting">-</b></span>
+        <span class="round-stat">已派<b id="cnt-dispatched">-</b></span>
+        <span class="round-stat s-suspended">挂起<b id="cnt-suspended">-</b></span>
+        <span style="margin-left: 12px; color:#888;">（三数与库同次点算）</span>
+        <button class="pear-btn pear-btn-primary pear-btn-md" style="float:right;" id="btn-run">
+            <i class="layui-icon layui-icon-refresh-3"></i> 立刻跑一轮
+        </button>
+        <div id="round-msg" style="margin-top:8px;color:#666;"></div>
+    </div>
+</div>
+
+<div class="layui-card">
+    <div class="layui-card-body">
+        <form class="layui-form" onsubmit="return false;">
+            <div class="layui-form-item">
+                <label class="layui-form-label">条号</label>
+                <div class="layui-input-inline">
+                    <input type="text" name="itemNo" class="layui-input">
+                </div>
+                <label class="layui-form-label">情形</label>
+                <div class="layui-input-inline">
+                    <select name="status">
+                        <option value="">全部</option>
+                        <option value="0">待派</option>
+                        <option value="1">已派</option>
+                        <option value="2">派不出去</option>
+                        <option value="3">挂起</option>
+                    </select>
+                </div>
+                <button class="pear-btn pear-btn-md pear-btn-primary" lay-submit lay-filter="task-query">
+                    <i class="layui-icon layui-icon-search"></i> 查询
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="layui-card">
+    <div class="layui-card-body">
+        <table id="task-table" lay-filter="task-table"></table>
+    </div>
+</div>
+
+<script type="text/html" id="task-bar">
+    <button class="pear-btn pear-btn-sm" lay-event="logs" title="派发留痕"><i class="layui-icon layui-icon-list"></i> 留痕</button>
+    <button class="pear-btn pear-btn-normal pear-btn-sm" lay-event="adjust" title="只调还剩几日">调提前天数</button>
+    <button class="pear-btn pear-btn-warming pear-btn-sm" lay-event="transfer">转办</button>
+    <button class="pear-btn pear-btn-danger pear-btn-sm" lay-event="cancel">撤条</button>
+</script>
+
+<th:block th:include="include :: footer"/>
+<script>
+    layui.use(['table', 'form', 'jquery', 'layer'], function () {
+        let table = layui.table, form = layui.form, $ = layui.jquery, layer = layui.layer;
+        let MODULE_PATH = rootPath + "/isHazTask";
+
+        let STATUS_TEXT = {'0': '待派', '1': '已派', '2': '派不出去', '3': '挂起'};
+
+        table.render({
+            elem: '#task-table',
+            url: MODULE_PATH + '/list',
+            method: 'get',
+            page: true,
+            skin: 'line',
+            cols: [[
+                {field: 'itemNo', title: '条号', width: 150},
+                {field: 'content', title: '隐患概况'},
+                {field: 'dueAt', title: '整改期限(当日最后一刻)', width: 190},
+                {field: 'amount', title: '提前露面天数', width: 120, align: 'center'},
+                {field: 'deptId', title: '负责部门id', width: 120, align: 'center'},
+                {field: 'acceptedAt', title: '接单时刻', width: 190},
+                {field: 'urgeCount', title: '催过几轮', width: 90, align: 'center'},
+                {field: 'status', title: '情形', width: 100, align: 'center',
+                    templet: function (d) { return STATUS_TEXT[d.status] || d.status; }},
+                {field: 'suspendReason', title: '挂起原由', width: 200},
+                {title: '操作', toolbar: '#task-bar', width: 300, align: 'center', fixed: 'right'}
+            ]]
+        });
+
+        form.on('submit(task-query)', function (data) {
+            table.reload('task-table', {where: data.field, page: {curr: 1}});
+            return false;
+        });
+
+        function refresh() {
+            table.reload('task-table');
+        }
+
+        function paintRound(r) {
+            $('#cnt-waiting').text(r.waitingCount);
+            $('#cnt-dispatched').text(r.dispatchedCount);
+            $('#cnt-suspended').text(r.suspendedCount);
+            let msg;
+            if (r.windowClosed) {
+                msg = '窗外静默：' + r.message + '（到期条原地不动，等下一窗口）';
+            } else if (!r.hasWork) {
+                msg = '本轮无活（窗口 ' + r.window + '，轮次 ' + r.roundNo + '）';
+            } else {
+                msg = '窗口 ' + r.window + '，轮次 ' + r.roundNo
+                    + '；本轮派出 ' + r.roundDispatched + ' 条、催办 ' + r.roundUrged
+                    + ' 轮、落「派不出去」' + r.roundStuck + ' 条。' + (r.message || '');
+            }
+            $('#round-msg').text(msg);
+        }
+
+        function runOnce() {
+            let loading = layer.load();
+            $.post(MODULE_PATH + '/run', function (result) {
+                layer.close(loading);
+                if (result.code == 200) {
+                    paintRound(result.data);
+                    refresh();
+                    layer.msg(result.msg || '本轮完成', {icon: 1, time: 1500});
+                } else {
+                    layer.msg('系统出错：' + result.msg, {icon: 2});
+                }
+            }).fail(function () {
+                layer.close(loading);
+                layer.msg('系统出错，请联系管理员', {icon: 2});
+            });
+        }
+
+        $('#btn-run').on('click', runOnce);
+
+        table.on('tool(task-table)', function (obj) {
+            let d = obj.data;
+            if (obj.event === 'cancel') {
+                layer.prompt({title: '撤条原由（留痕，期限与首派时刻不动）'}, function (val, idx) {
+                    layer.close(idx);
+                    $.post(MODULE_PATH + '/cancel', {id: d.id, reason: val}, function (r) {
+                        layer.msg(r.msg, {icon: r.code == 200 ? 1 : 2}, refresh);
+                    });
+                });
+            } else if (obj.event === 'transfer') {
+                layer.prompt({title: '转办给哪个责任部门（填部门id）', formType: 0}, function (val, idx) {
+                    layer.close(idx);
+                    $.post(MODULE_PATH + '/transfer', {id: d.id, toDeptId: val, reason: '人工转办'},
+                        function (r) {
+                            layer.msg(r.msg, {icon: r.code == 200 ? 1 : 2}, refresh);
+                        });
+                });
+            } else if (obj.event === 'adjust') {
+                layer.prompt({title: '到期前还剩几日露面（只许调这一档）', value: d.amount},
+                    function (val, idx) {
+                        layer.close(idx);
+                        $.post(MODULE_PATH + '/adjustLeadDays', {id: d.id, leadDays: val},
+                            function (r) {
+                                layer.msg(r.msg, {icon: r.code == 200 ? 1 : 2}, refresh);
+                            });
+                    });
+            } else if (obj.event === 'logs') {
+                $.get(MODULE_PATH + '/logs', {id: d.id}, function (r) {
+                    let rows = r.data || [];
+                    let ACT = {'1': '挂起', '2': '派出', '3': '撤条', '4': '转办', '5': '催办'};
+                    let html = rows.length ? rows.map(function (l) {
+                        return '<div style="margin-bottom:6px;">'
+                            + (l.createTime || '') + ' [' + (ACT[l.action] || l.action) + '] '
+                            + (l.fromDeptId ? ('部门' + l.fromDeptId + '→') : '')
+                            + (l.toDeptId ? l.toDeptId : '')
+                            + ' 期限:' + (l.dueAt || '')
+                            + ' 首派:' + (l.acceptedAt || '')
+                            + ' ' + (l.reason || '') + '</div>';
+                    }).join('') : '<div>暂无留痕</div>';
+                    layer.open({type: 1, title: '条[' + d.itemNo + ']派发留痕', area: ['640px', '420px'],
+                        content: '<div style="padding:14px;max-height:360px;overflow:auto;">' + html + '</div>'});
+                });
+            }
+        });
+    });
+</script>
+</body>
+</html>

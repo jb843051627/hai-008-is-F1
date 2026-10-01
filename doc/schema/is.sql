@@ -75,19 +75,48 @@ CREATE TABLE IF NOT EXISTS t_is_haz_card (
 
 CREATE TABLE IF NOT EXISTS t_is_haz_task (
   id bigint NOT NULL COMMENT '主键',
-  item_no varchar(64) DEFAULT NULL COMMENT '整改事项号',
-  due_at datetime DEFAULT NULL COMMENT '整改期限那一天最后一刻',
-  amount decimal(12,2) DEFAULT NULL COMMENT '单条提前派发的自然日数',
-  content varchar(255) DEFAULT NULL COMMENT '隐患事由与受派部门记要',
-  status int DEFAULT NULL COMMENT '条目情形 0待派 1已派 2派不出去',
+  item_no varchar(64) DEFAULT NULL COMMENT '整改事项号（条号）',
+  due_at datetime DEFAULT NULL COMMENT '整改期限那一天最后一刻（全系统唯一口径，落定后不得改）',
+  amount decimal(12,2) DEFAULT NULL COMMENT '到期前露面的剩余自然日数（唯一允许调的一档）',
+  content varchar(255) DEFAULT NULL COMMENT '隐患概况',
+  dept_id bigint DEFAULT NULL COMMENT '负责部门：派出前为拟定责任部门，派出后为实际受派部门',
+  accepted_at datetime DEFAULT NULL COMMENT '接单时刻（实际派出那一刻，随首派留痕，不得覆盖）',
+  urge_count int DEFAULT '0' COMMENT '已催办轮数',
+  suspend_reason varchar(255) DEFAULT NULL COMMENT '挂起原由（非空即挂起，明细页仍可翻到）',
+  status int DEFAULT NULL COMMENT '条目情形 0待派 1已派 2派不出去 3挂起',
+  del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除（撤条走 del_flag 留痕，不物理删除）',
+  create_by varchar(64) DEFAULT NULL COMMENT '创建者',
+  create_time datetime DEFAULT NULL COMMENT '创建时间',
+  update_by varchar(64) DEFAULT NULL COMMENT '更新者',
+  update_time datetime DEFAULT NULL COMMENT '更新时间',
+  remark varchar(500) DEFAULT NULL COMMENT '备注',
+  PRIMARY KEY (id),
+  KEY idx_haz_task_status_due (status, del_flag, due_at),
+  KEY idx_haz_task_dept (dept_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='隐患整改到期事项条（催办条）';
+
+CREATE TABLE IF NOT EXISTS t_is_haz_task_log (
+  id bigint NOT NULL COMMENT '主键',
+  task_id bigint DEFAULT NULL COMMENT '催办条id',
+  item_no varchar(64) DEFAULT NULL COMMENT '条号（快照）',
+  action int DEFAULT NULL COMMENT '留痕动作 1挂起 2派出 3撤条 4转办 5催办',
+  from_dept_id bigint DEFAULT NULL COMMENT '动前部门（撤条/转办时为原受派部门）',
+  to_dept_id bigint DEFAULT NULL COMMENT '动后部门（派出/转办的落定部门）',
+  due_at datetime DEFAULT NULL COMMENT '最初定下的整改期限（快照，永不被后到动作覆盖）',
+  accepted_at datetime DEFAULT NULL COMMENT '最初真正派出的时刻（快照，撤条/转办不许覆盖）',
+  reason varchar(255) DEFAULT NULL COMMENT '原由/记事（挂起原由、撤条说明、催办轮次等）',
+  round_no varchar(32) DEFAULT NULL COMMENT '派发轮次号（窗口+当日去重的幂等键口径）',
   del_flag int DEFAULT '0' COMMENT '删除标记 0正常 1删除',
   create_by varchar(64) DEFAULT NULL COMMENT '创建者',
   create_time datetime DEFAULT NULL COMMENT '创建时间',
   update_by varchar(64) DEFAULT NULL COMMENT '更新者',
   update_time datetime DEFAULT NULL COMMENT '更新时间',
   remark varchar(500) DEFAULT NULL COMMENT '备注',
-  PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='隐患整改到期事项条';
+  PRIMARY KEY (id),
+  KEY idx_haz_task_log_task (task_id),
+  KEY idx_haz_task_log_round (round_no, action),
+  UNIQUE KEY uk_task_round_action (task_id, round_no, action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='催办条派发处置留痕';
 
 CREATE TABLE IF NOT EXISTS t_is_lim_rule (
   id bigint NOT NULL COMMENT '主键',

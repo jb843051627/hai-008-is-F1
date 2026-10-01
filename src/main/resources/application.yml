@@ -128,3 +128,13 @@ oss:
   access-key: minioadmin  # 上文创建的AK
   secret-key: minioadmin # 上文创建的SK
   bucket-name: v2-cloud  # 上文创建的桶名称
+# 隐患整改催办条派发窗口（几点派、派不派，窗口说了算）
+is:
+  dispatch:
+    daily-from: 08:00
+    daily-to: 18:00
+    special-from: 08:00
+    special-to: 20:00
+    special-start:
+    special-end:
+    holidays:

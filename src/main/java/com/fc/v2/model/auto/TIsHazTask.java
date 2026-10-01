@@ -43,19 +43,41 @@ public class TIsHazTask implements Serializable {
     @ApiModelProperty(value = "整改期限那一天最后一刻")
     private Date dueAt;
 
-    /** 单条提前派发的自然日数 */
+    /** 到期前露面的剩余自然日数（唯一允许调的一档） */
     @TableField("amount")
-    @ApiModelProperty(value = "单条提前派发的自然日数")
+    @ApiModelProperty(value = "到期前露面的剩余自然日数（唯一允许调的一档）")
     private BigDecimal amount;
 
-    /** 隐患事由与受派部门记要 */
+    /** 隐患概况 */
     @TableField("content")
-    @ApiModelProperty(value = "隐患事由与受派部门记要")
+    @ApiModelProperty(value = "隐患概况")
     private String content;
 
-    /** 条目情形 0待派 1已派 2派不出去 */
+    /** 负责部门：派出前为拟定责任部门，派出后为实际受派部门 */
+    @TableField("dept_id")
+    @JsonSerialize(using = ToStringSerializer.class)
+    @ApiModelProperty(value = "负责部门")
+    private Long deptId;
+
+    /** 接单时刻（实际派出那一刻，随首派留痕，不得覆盖） */
+    @TableField("accepted_at")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @ApiModelProperty(value = "接单时刻")
+    private Date acceptedAt;
+
+    /** 已催办轮数 */
+    @TableField("urge_count")
+    @ApiModelProperty(value = "已催办轮数")
+    private Integer urgeCount;
+
+    /** 挂起原由（非空即挂起，明细页仍可翻到） */
+    @TableField("suspend_reason")
+    @ApiModelProperty(value = "挂起原由")
+    private String suspendReason;
+
+    /** 条目情形 0待派 1已派 2派不出去 3挂起 */
     @TableField("status")
-    @ApiModelProperty(value = "条目情形 0待派 1已派 2派不出去")
+    @ApiModelProperty(value = "条目情形 0待派 1已派 2派不出去 3挂起")
     private Integer status;
 
     /** 删除标记 0正常 1删除 */
@@ -128,6 +150,38 @@ public class TIsHazTask implements Serializable {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public Long getDeptId() {
+        return deptId;
+    }
+
+    public void setDeptId(Long deptId) {
+        this.deptId = deptId;
+    }
+
+    public Date getAcceptedAt() {
+        return acceptedAt;
+    }
+
+    public void setAcceptedAt(Date acceptedAt) {
+        this.acceptedAt = acceptedAt;
+    }
+
+    public Integer getUrgeCount() {
+        return urgeCount;
+    }
+
+    public void setUrgeCount(Integer urgeCount) {
+        this.urgeCount = urgeCount;
+    }
+
+    public String getSuspendReason() {
+        return suspendReason;
+    }
+
+    public void setSuspendReason(String suspendReason) {
+        this.suspendReason = suspendReason;
     }
 
     public Integer getStatus() {
