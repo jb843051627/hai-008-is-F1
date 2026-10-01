@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.pollix.at/thymeleaf/shiro">
+<head>
+    <th:block th:include="include :: header('隐患整改催办明细')"/>
+</head>
+<body class="pear-container">
+
+<!-- 一轮跑完亮一屏：待派/已派/挂起，只数本轮；与库同一次点算 -->
+<div class="layui-card">
+    <div class="layui-card-body">
+        <div class="layui-row layui-col-space10">
+            <div class="layui-col-xs3">
+                <div class="layui-card" style="border-left:4px solid #FFB800;">
+                    <div class="layui-card-header">本轮待派</div>
+                    <div class="layui-card-body">
+                        <span id="screen-wait" style="font-size:28px;color:#FFB800;" th:text="${latest?.waitCnt} ?: 0">0</span> 条
+                    </div>
+                </div>
+            </div>
+            <div class="layui-col-xs3">
+                <div class="layui-card" style="border-left:4px solid #1E9FFF;">
+                    <div class="layui-card-header">本轮已派</div>
+                    <div class="layui-card-body">
+                        <span id="screen-dispatched" style="font-size:28px;color:#1E9FFF;" th:text="${latest?.dispatchedCnt} ?: 0">0</span> 条
+                    </div>
+                </div>
+            </div>
+            <div class="layui-col-xs3">
+                <div class="layui-card" style="border-left:4px solid #FF5722;">
+                    <div class="layui-card-header">本轮挂起</div>
+                    <div class="layui-card-body">
+                        <span id="screen-suspended" style="font-size:28px;color:#FF5722;" th:text="${latest?.suspendedCnt} ?: 0">0</span> 条
+                    </div>
+                </div>
+            </div>
+            <div class="layui-col-xs3">
+                <div class="layui-card">
+                    <div class="layui-card-header">最近一轮</div>
+                    <div class="layui-card-body" style="font-size:13px;line-height:1.8;">
+                        <div id="screen-round">
+                            <span th:if="${latest != null}"
+                                  th:text="${latest.winName} + ' · ' + ${#dates.format(latest.roundDate,'yyyy-MM-dd')}"></span>
+                            <span th:if="${latest == null}">尚未跑过</span>
+                        </div>
+                        <div id="screen-msg" style="color:#888;" th:text="${latest?.message}"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="layui-card">
+    <div class="layui-card-body">
+        <form class="layui-form" action="">
+            <div class="layui-form-item">
+                <label class="layui-form-label">当前情形</label>
+                <div class="layui-input-inline">
+                    <select name="status" class="layui-input">
+                        <option value="">全部</option>
+                        <option value="0">待派</option>
+                        <option value="1">已派</option>
+                        <option value="2">派不出去</option>
+                        <option value="3">挂起</option>
+                        <option value="4">已撤</option>
+                        <option value="5">转办</option>
+                    </select>
+                </div>
+                <button class="pear-btn pear-btn-md pear-btn-primary" lay-submit lay-filter="haz-query">
+                    <i class="layui-icon layui-icon-search"></i> 查询
+                </button>
+                <button type="reset" class="pear-btn pear-btn-md">
+                    <i class="layui-icon layui-icon-refresh"></i> 重置
+                </button>
+                <button shiro:hasPermission="isHazTask:run" class="pear-btn pear-btn-md pear-btn-success" lay-submit lay-filter="haz-generate" style="margin-left:16px;">
+                    <i class="layui-icon layui-icon-add-1"></i> 生成催办条
+                </button>
+                <button shiro:hasPermission="isHazTask:run" class="pear-btn pear-btn-md pear-btn-warming" lay-submit lay-filter="haz-run">
+                    <i class="layui-icon layui-icon-refresh-3"></i> 立即跑一轮
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="layui-card">
+    <div class="layui-card-body">
+        <table id="haz-table" lay-filter="haz-table"></table>
+    </div>
+</div>
+
+<script type="text/html" id="haz-status">
+    {{#  if(d.status===0){ }}<span class="layui-badge layui-bg-orange">待派</span>
+    {{#  } else if(d.status===1){ }}<span class="layui-badge layui-bg-blue">已派</span>
+    {{#  } else if(d.status===2){ }}<span class="layui-badge">派不出去</span>
+    {{#  } else if(d.status===3){ }}<span class="layui-badge layui-bg-gray">挂起</span>
+    {{#  } else if(d.status===4){ }}<span class="layui-badge layui-bg-black">已撤</span>
+    {{#  } else if(d.status===5){ }}<span class="layui-badge layui-bg-cyan">转办</span>{{#  } }}
+</script>
+
+<script type="text/html" id="haz-daysleft">
+    {{#  if(d.daysLeft===null || d.daysLeft===undefined){ }}—
+    {{#  } else if(d.daysLeft>0){ }}<span style="color:#1E9FFF;">还剩 {{d.daysLeft}} 日</span>
+    {{#  } else if(d.daysLeft===0){ }}<span style="color:#FFB800;">今日到期</span>
+    {{#  } else{ }}<span style="color:#FF5722;">已逾期 {{-d.daysLeft}} 日</span>{{#  } }}
+</script>
+
+<script type="text/html" id="haz-bar">
+    <button shiro:hasPermission="isHazTask:list" class="pear-btn pear-btn-primary pear-btn-sm" lay-event="trace">留痕</button>
+    <button shiro:hasPermission="isHazTask:handle" class="pear-btn pear-btn-warming pear-btn-sm" lay-event="tune">调档</button>
+    <button shiro:hasPermission="isHazTask:handle" class="pear-btn pear-btn-normal pear-btn-sm" lay-event="transfer">转办</button>
+    <button shiro:hasPermission="isHazTask:handle" class="pear-btn pear-btn-danger pear-btn-sm" lay-event="revoke">撤条</button>
+</script>
+
+<th:block th:include="include :: footer"/>
+<script>
+    layui.use(['table', 'form', 'jquery', 'layer'], function () {
+        let table = layui.table, form = layui.form, $ = layui.jquery, layer = layui.layer;
+        let MP = rootPath + "/isHazTask/";
+
+        table.render({
+            elem: '#haz-table',
+            url: MP + 'list',
+            method: 'get',
+            page: true,
+            skin: 'line',
+            cols: [[
+                {field: 'billNo', title: '催办条号', width: 170},
+                {field: 'hazardSummary', title: '隐患概况', minWidth: 220},
+                {field: 'dueAt', title: '整改期限(最后一刻)', width: 170, align: 'center'},
+                {field: 'daysLeft', title: '还剩几日', width: 110, align: 'center', templet: '#haz-daysleft'},
+                {field: 'pinDeptName', title: '原定部门', width: 150},
+                {field: 'acceptDeptName', title: '接手部门', width: 150},
+                {field: 'acceptedAt', title: '接手时刻', width: 170, align: 'center'},
+                {field: 'urgeRounds', title: '催过轮次', width: 90, align: 'center'},
+                {field: 'status', title: '情形', width: 100, align: 'center', templet: '#haz-status'},
+                {title: '操作', width: 250, align: 'center', fixed: 'right', toolbar: '#haz-bar'}
+            ]],
+            parseData: function (res) {
+                // 挂起条的原由放在隐患概况下提示
+                return {code: res.code, msg: res.msg, count: res.count, data: res.data};
+            },
+            done: function () {
+                $('.layui-table-body tr').each(function () {
+                    let idx = $(this).attr('data-index');
+                    let d = table.cache['haz-table'][idx];
+                    if (d && d.status === 3 && d.suspendReason) {
+                        $(this).attr('title', '挂起原由：' + d.suspendReason);
+                    }
+                });
+            }
+        });
+
+        form.on('submit(haz-query)', function (data) {
+            table.reload('haz-table', {where: data.field, page: {curr: 1}});
+            return false;
+        });
+
+        // 生成催办条
+        form.on('submit(haz-generate)', function () {
+            let loading = layer.load();
+            $.post(MP + 'generate', {}, function (r) {
+                layer.close(loading);
+                layer.msg(r.msg, {icon: r.code === 200 ? 1 : 2});
+                if (r.code === 200) { table.reload('haz-table'); refreshScreen(); }
+            });
+            return false;
+        });
+
+        // 立即跑一轮：窗口关闭/本轮无活/系统出错各有各的话术
+        form.on('submit(haz-run)', function () {
+            let loading = layer.load();
+            $.post(MP + 'run', {}, function (r) {
+                layer.close(loading);
+                let icon = r.code === 500 ? 2 : 1;
+                layer.alert(r.msg, {icon: icon, title: '本轮派发'}, function (i) {
+                    layer.close(i);
+                    table.reload('haz-table');
+                    refreshScreen();
+                });
+            });
+            return false;
+        });
+
+        table.on('tool(haz-table)', function (obj) {
+            let d = obj.data;
+            if (obj.event === 'trace') {
+                $.get(MP + 'detail', {id: d.id}, function (r) {
+                    if (r.code !== 200) { layer.msg(r.msg, {icon: 2}); return; }
+                    let b = r.data.bill, logs = r.data.logs, html = '';
+                    html += '<div style="line-height:2;margin-bottom:8px;">'
+                        + '<b>' + (b.billNo || '') + '</b><br>'
+                        + '隐患概况：' + (b.hazardSummary || '') + '<br>'
+                        + '期限最后一刻：' + b.dueAt + '（定死不动）<br>'
+                        + '原定部门：' + (b.pinDeptName || '—') + '　接手部门：' + (b.acceptDeptName || '—') + '<br>'
+                        + '接手时刻：' + (b.acceptedAt || '—') + '　催过 ' + (b.urgeRounds || 0) + ' 轮'
+                        + (b.suspendReason ? '<br><span style="color:#FF5722;">挂起原由：' + b.suspendReason + '</span>' : '')
+                        + '</div><hr><table class="layui-table" style="margin:0;font-size:12px;"><thead><tr>'
+                        + '<th>时刻</th><th>动作</th><th>部门</th><th>说明</th></tr></thead><tbody>';
+                    let actName = {CREATE:'生成', SUSPEND:'挂起', DISPATCH:'派出', URGE:'催办', REVOKE:'撤条', TRANSFER:'转办', TUNE:'调档'};
+                    logs.forEach(function (l) {
+                        html += '<tr><td>' + (l.createTime || '') + '</td><td>' + (actName[l.action] || l.action)
+                            + '</td><td>' + (l.deptName || '—') + '</td><td>' + (l.detail || '') + '</td></tr>';
+                    });
+                    if (!logs.length) { html += '<tr><td colspan="4">暂无留痕</td></tr>'; }
+                    html += '</tbody></table>';
+                    layer.open({type: 1, title: '催办全过程留痕', area: ['760px', '520px'], content: html});
+                });
+            } else if (obj.event === 'tune') {
+                layer.prompt({title: '只调"到期前还剩几日露面"（期限那一刻不动）', value: d.amount, formType: 0},
+                    function (val, idx) {
+                        $.post(MP + 'tune', {id: d.id, leadDays: val}, function (r) {
+                            layer.close(idx);
+                            layer.msg(r.msg, {icon: r.code === 200 ? 1 : 2});
+                            if (r.code === 200) table.reload('haz-table');
+                        });
+                    });
+            } else if (obj.event === 'transfer') {
+                layer.prompt({title: '转办给部门ID（期限过了仍派不出去才可用）', formType: 0},
+                    function (val, idx) {
+                        layer.prompt({title: '转办原由', formType: 2}, function (reason, idx2) {
+                            $.post(MP + 'transfer', {id: d.id, toDeptId: val, reason: reason}, function (r) {
+                                layer.close(idx); layer.close(idx2);
+                                layer.msg(r.msg, {icon: r.code === 200 ? 1 : 2});
+                                if (r.code === 200) table.reload('haz-table');
+                            });
+                        });
+                    });
+            } else if (obj.event === 'revoke') {
+                layer.prompt({title: '撤条原由（撤条留痕，期限与初派时刻原样保留）', formType: 2},
+                    function (reason, idx) {
+                        $.post(MP + 'revoke', {id: d.id, reason: reason}, function (r) {
+                            layer.close(idx);
+                            layer.msg(r.msg, {icon: r.code === 200 ? 1 : 2});
+                            if (r.code === 200) table.reload('haz-table');
+                        });
+                    });
+            }
+        });
+
+        // 亮屏与库同源：拿最近一次点算刷新三个数
+        function refreshScreen() {
+            $.get(MP + 'latestRound', {}, function (r) {
+                let l = r.data;
+                if (!l) { return; }
+                $('#screen-wait').text(l.waitCnt);
+                $('#screen-dispatched').text(l.dispatchedCnt);
+                $('#screen-suspended').text(l.suspendedCnt);
+                $('#screen-round').text(l.winName + ' · ' + l.roundDate);
+                $('#screen-msg').text(l.message);
+            });
+        }
+    });
+</script>
+</body>
+</html>
